@@ -31,17 +31,19 @@ st.set_page_config(page_title="Account Scraper", layout="centered")
 st.title("🔍 Social Account Scraper")
 
 platform = st.selectbox("اختر المنصة:", ["Twitter", "Telegram", "Reddit", "TikTok"])
-url = st.text_input("أدخل رابط الحساب:")
+urls_input = st.text_area("أدخل روابط الحسابات (كل رابط في سطر):")
 
 if "results" not in st.session_state:
     st.session_state.results = []
 
 if st.button("ابدأ"):
-    if url:
-        result = scrape_account(platform, url)
-        st.session_state.results.append(result)
+    urls = [u.strip() for u in urls_input.split("\\n") if u.strip()]
+    if urls:
+        for url in urls:
+            result = scrape_account(platform, url)
+            st.session_state.results.append(result)
     else:
-        st.warning("يرجى إدخال رابط صالح")
+        st.warning("يرجى إدخال رابط أو أكثر")
 
 if st.session_state.results:
     st.markdown("---")
