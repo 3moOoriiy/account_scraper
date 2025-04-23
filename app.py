@@ -4,28 +4,30 @@ import requests
 from bs4 import BeautifulSoup
 import praw
 
-# إعداد Reddit API
+# إعداد ريديت
 reddit = praw.Reddit(
     client_id="qfRizUHOzPM5DXtO8a3UoQ",
     client_secret="nrklg9cnDPaqu0Vzfa_RdOk2lETt3A",
     username="Few_Measurement8753",
-    password="شةقشةق4248",  # تأكد إنك تحافظ على الخصوصية
+    password="كلمة_السر_بتاعتك",
     user_agent="Reddit scraper by u/Few_Measurement8753"
 )
 
-# دالة سحب بيانات Reddit
+# دالة ريديت
 def scrape_reddit(username):
     try:
         user = reddit.redditor(username)
         name = user.name
-        bio = user.subreddit.public_description if user.subreddit else "N/A"
-        link = f"https://www.reddit.com/user/{username}/"
+        try:
+            bio = user.subreddit.public_description
+        except:
+            bio = "N/A"
         return {
             "Platform": "Reddit",
             "Account Name": name,
             "Account Bio": bio,
             "Status": "Active",
-            "Link": link
+            "Link": f"https://www.reddit.com/user/{username}/"
         }
     except Exception as e:
         return {
@@ -36,29 +38,21 @@ def scrape_reddit(username):
             "Link": f"https://www.reddit.com/user/{username}/"
         }
 
-# دالة سحب بيانات Telegram
+# دالة تليجرام
 def scrape_telegram(url):
     try:
-        headers = {
-            "User-Agent": "Mozilla/5.0"
-        }
-        res = requests.get(url, headers=headers, timeout=10)
-        if res.status_code != 200:
-            raise Exception("Page not reachable")
-
-        soup = BeautifulSoup(res.text, 'html.parser')
-        title = soup.find("title").text.strip()
-        bio_tag = soup.find("meta", attrs={"name": "description"})
-        bio = bio_tag["content"].strip() if bio_tag else "N/A"
-
+        response = requests.get(url)
+        soup = BeautifulSoup(response.content, "html.parser")
+        name = soup.find("meta", property="og:title")
+        bio = soup.find("meta", property="og:description")
         return {
             "Platform": "Telegram",
-            "Account Name": title,
-            "Account Bio": bio,
+            "Account Name": name["content"] if name else "N/A",
+            "Account Bio": bio["content"] if bio else "N/A",
             "Status": "Active",
             "Link": url
         }
-    except Exception:
+    except Exception as e:
         return {
             "Platform": "Telegram",
             "Account Name": "N/A",
@@ -70,23 +64,22 @@ def scrape_telegram(url):
 # واجهة Streamlit
 st.title("🔍 Social Account Scraper")
 platform = st.selectbox("اختر المنصة:", ["Telegram", "Reddit"])
-links_input = st.text_area("أدخل روابط الحسابات (كل رابط في سطر):")
-submit = st.button("ابدأ")
+input_text = st.text_area("أدخل روابط الحسابات (كل رابط في سطر):")
 
-if submit and links_input:
-    links = [l.strip() for l in links_input.splitlines() if l.strip()]
+if st.button("ابدأ"):
+    st.info(f"جاري سحب البيانات من {platform}...")
     results = []
-
+    links = [line.strip() for line in input_text.split("\n") if line.strip()]
+    
     for link in links:
-        if platform == "Telegram":
-            results.append(scrape_telegram(link))
-        elif platform == "Reddit":
-            username = link.strip('/').split('/')[-1]
+        if platform == "Reddit":
+            username = link.split("/")[-2] if link.endswith("/") else link.split("/")[-1]
             results.append(scrape_reddit(username))
+        elif platform == "Telegram":
+            results.append(scrape_telegram(link))
 
-    df = pd.DataFrame(results)
-    st.markdown("### 📊 النتائج:")
-    st.dataframe(df, use_container_width=True)
-
-    csv = df.to_csv(index=False).encode('utf-8')
-    st.download_button("📥 تحميل النتائج CSV", data=csv, file_name="results.csv", mime="text/csv")
+    if results:
+        df = pd.DataFrame(results)
+        st.markdown("### 📊 النتائج:")
+        st.dataframe(df)
+        st.download_button("تحميل النتائج CSV", df.to_csv(index=False).encode('utf-8'), "results.csv", "text/csv")
