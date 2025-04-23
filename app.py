@@ -1,35 +1,34 @@
-import streamlit as st
-import pandas as pd
 import requests
 from bs4 import BeautifulSoup
 import praw
+import pandas as pd
+import streamlit as st
 
-# إعداد ريديت
+# إعداد Reddit API
 reddit = praw.Reddit(
     client_id="qfRizUHOzPM5DXtO8a3UoQ",
     client_secret="nrklg9cnDPaqu0Vzfa_RdOk2lETt3A",
+    user_agent="Reddit scraper by u/Few_Measurement8753",
     username="Few_Measurement8753",
-    password="شةقشةق4248",
-    user_agent="Reddit scraper by u/Few_Measurement8753"
+    password="شةقشةق4248"
 )
 
-# دالة سحب بيانات Reddit
+# دالة لجلب معلومات حساب Reddit
 def scrape_reddit(username):
     try:
         user = reddit.redditor(username)
         name = user.name
+        created = pd.to_datetime(user.created_utc, unit='s').strftime('%Y-%m-%d')
         try:
-            bio = user.subreddit.public_description if user.subreddit else "N/A"
+            bio = user.subreddit.public_description
         except:
             bio = "N/A"
         try:
-            karma = user.link_karma + user.comment_karma
+            post_karma = user.link_karma
+            comment_karma = user.comment_karma
+            karma = f"{post_karma + comment_karma} (Post: {post_karma}, Comment: {comment_karma})"
         except:
             karma = "N/A"
-        try:
-            created = pd.to_datetime(user.created_utc, unit='s').strftime('%Y-%m-%d')
-        except:
-            created = "N/A"
         return {
             "Platform": "Reddit",
             "Account Name": name,
@@ -39,7 +38,7 @@ def scrape_reddit(username):
             "Status": "Active",
             "Link": f"https://www.reddit.com/user/{username}/"
         }
-    except:
+    except Exception as e:
         return {
             "Platform": "Reddit",
             "Account Name": "N/A",
@@ -50,10 +49,10 @@ def scrape_reddit(username):
             "Link": f"https://www.reddit.com/user/{username}/"
         }
 
-# دالة سحب بيانات Telegram
+# دالة لجلب معلومات حساب Telegram
 def scrape_telegram(url):
     try:
-        response = requests.get(url, timeout=10)
+        response = requests.get(url)
         soup = BeautifulSoup(response.content, "html.parser")
         name = soup.find("meta", property="og:title")
         bio = soup.find("meta", property="og:description")
@@ -66,7 +65,7 @@ def scrape_telegram(url):
             "Status": "Active",
             "Link": url
         }
-    except:
+    except Exception as e:
         return {
             "Platform": "Telegram",
             "Account Name": "N/A",
@@ -77,8 +76,9 @@ def scrape_telegram(url):
             "Link": url
         }
 
-# واجهة Streamlit
+# بناء واجهة Streamlit
 st.title("🔍 Social Account Scraper")
+
 platform = st.selectbox("اختر المنصة:", ["Telegram", "Reddit"])
 input_text = st.text_area("أدخل روابط الحسابات (كل رابط في سطر):")
 
@@ -86,7 +86,7 @@ if st.button("ابدأ"):
     st.info(f"جاري سحب البيانات من {platform}...")
     results = []
     links = [line.strip() for line in input_text.split("\n") if line.strip()]
-    
+
     for link in links:
         if platform == "Reddit":
             username = link.split("/")[-2] if link.endswith("/") else link.split("/")[-1]
@@ -97,5 +97,5 @@ if st.button("ابدأ"):
     if results:
         df = pd.DataFrame(results)
         st.markdown("### 📊 النتائج:")
-        st.dataframe(df, use_container_width=True)
+        st.dataframe(df)
         st.download_button("تحميل النتائج CSV", df.to_csv(index=False).encode('utf-8'), "results.csv", "text/csv")
