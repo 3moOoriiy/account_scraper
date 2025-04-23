@@ -1,18 +1,19 @@
 import streamlit as st
 import pandas as pd
 import requests
-import re
-import praw
 from bs4 import BeautifulSoup
+import praw
 
 # إعداد Reddit API
 reddit = praw.Reddit(
     client_id="qfRizUHOzPM5DXtO8a3UoQ",
     client_secret="nrklg9cnDPaqu0Vzfa_RdOk2lETt3A",
-    user_agent="Reddit user data scraper by /u/Few_Measurement8753"
+    username="Few_Measurement8753",
+    password="شةقشةق4248",  # تأكد إنك تحافظ على الخصوصية
+    user_agent="Reddit scraper by u/Few_Measurement8753"
 )
 
-# استخراج بيانات Reddit
+# دالة سحب بيانات Reddit
 def scrape_reddit(username):
     try:
         user = reddit.redditor(username)
@@ -26,7 +27,7 @@ def scrape_reddit(username):
             "Status": "Active",
             "Link": link
         }
-    except Exception:
+    except Exception as e:
         return {
             "Platform": "Reddit",
             "Account Name": "N/A",
@@ -35,21 +36,27 @@ def scrape_reddit(username):
             "Link": f"https://www.reddit.com/user/{username}/"
         }
 
-# استخراج بيانات Telegram
-def scrape_telegram(link):
+# دالة سحب بيانات Telegram
+def scrape_telegram(url):
     try:
-        headers = {'User-Agent': 'Mozilla/5.0'}
-        response = requests.get(link, headers=headers, timeout=10)
-        soup = BeautifulSoup(response.text, 'html.parser')
-        name = soup.title.text.strip() if soup.title else "N/A"
-        description = soup.find("meta", {"name": "description"})
-        bio = description["content"] if description else "N/A"
+        headers = {
+            "User-Agent": "Mozilla/5.0"
+        }
+        res = requests.get(url, headers=headers, timeout=10)
+        if res.status_code != 200:
+            raise Exception("Page not reachable")
+
+        soup = BeautifulSoup(res.text, 'html.parser')
+        title = soup.find("title").text.strip()
+        bio_tag = soup.find("meta", attrs={"name": "description"})
+        bio = bio_tag["content"].strip() if bio_tag else "N/A"
+
         return {
             "Platform": "Telegram",
-            "Account Name": name,
+            "Account Name": title,
             "Account Bio": bio,
             "Status": "Active",
-            "Link": link
+            "Link": url
         }
     except Exception:
         return {
@@ -57,37 +64,29 @@ def scrape_telegram(link):
             "Account Name": "N/A",
             "Account Bio": "N/A",
             "Status": "Failed or Not Found",
-            "Link": link
+            "Link": url
         }
 
-# الواجهة
+# واجهة Streamlit
 st.title("🔍 Social Account Scraper")
 platform = st.selectbox("اختر المنصة:", ["Telegram", "Reddit"])
-user_input = st.text_area("أدخل روابط الحسابات (كل رابط في سطر):")
+links_input = st.text_area("أدخل روابط الحسابات (كل رابط في سطر):")
+submit = st.button("ابدأ")
 
-if st.button("ابدأ"):
-    st.write(f"جاري سحب البيانات من {platform}...")
-    links = [line.strip() for line in user_input.splitlines() if line.strip()]
+if submit and links_input:
+    links = [l.strip() for l in links_input.splitlines() if l.strip()]
     results = []
 
     for link in links:
-        if platform == "Reddit":
-            match = re.search(r"reddit\.com/user/([^/]+)", link)
-            if match:
-                username = match.group(1)
-                results.append(scrape_reddit(username))
-            else:
-                results.append({
-                    "Platform": "Reddit",
-                    "Account Name": "N/A",
-                    "Account Bio": "N/A",
-                    "Status": "Invalid Link",
-                    "Link": link
-                })
-        elif platform == "Telegram":
+        if platform == "Telegram":
             results.append(scrape_telegram(link))
+        elif platform == "Reddit":
+            username = link.strip('/').split('/')[-1]
+            results.append(scrape_reddit(username))
 
     df = pd.DataFrame(results)
-    st.subheader("📊 النتائج:")
-    st.dataframe(df)
-    st.download_button("📥 تحميل النتائج CSV", df.to_csv(index=False), file_name="results.csv", mime="text/csv")
+    st.markdown("### 📊 النتائج:")
+    st.dataframe(df, use_container_width=True)
+
+    csv = df.to_csv(index=False).encode('utf-8')
+    st.download_button("📥 تحميل النتائج CSV", data=csv, file_name="results.csv", mime="text/csv")
