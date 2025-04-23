@@ -13,35 +13,47 @@ reddit = praw.Reddit(
     user_agent="Reddit scraper by u/Few_Measurement8753"
 )
 
-# دالة ريديت
+# دالة سحب بيانات Reddit
 def scrape_reddit(username):
     try:
         user = reddit.redditor(username)
         name = user.name
         try:
-            bio = user.subreddit.public_description
+            bio = user.subreddit.public_description if user.subreddit else "N/A"
         except:
             bio = "N/A"
+        try:
+            karma = user.link_karma + user.comment_karma
+        except:
+            karma = "N/A"
+        try:
+            created = pd.to_datetime(user.created_utc, unit='s').strftime('%Y-%m-%d')
+        except:
+            created = "N/A"
         return {
             "Platform": "Reddit",
             "Account Name": name,
             "Account Bio": bio,
+            "Karma": karma,
+            "Created At": created,
             "Status": "Active",
             "Link": f"https://www.reddit.com/user/{username}/"
         }
-    except Exception as e:
+    except:
         return {
             "Platform": "Reddit",
             "Account Name": "N/A",
             "Account Bio": "N/A",
+            "Karma": "N/A",
+            "Created At": "N/A",
             "Status": "Failed or Not Found",
             "Link": f"https://www.reddit.com/user/{username}/"
         }
 
-# دالة تليجرام
+# دالة سحب بيانات Telegram
 def scrape_telegram(url):
     try:
-        response = requests.get(url)
+        response = requests.get(url, timeout=10)
         soup = BeautifulSoup(response.content, "html.parser")
         name = soup.find("meta", property="og:title")
         bio = soup.find("meta", property="og:description")
@@ -49,14 +61,18 @@ def scrape_telegram(url):
             "Platform": "Telegram",
             "Account Name": name["content"] if name else "N/A",
             "Account Bio": bio["content"] if bio else "N/A",
+            "Karma": "N/A",
+            "Created At": "N/A",
             "Status": "Active",
             "Link": url
         }
-    except Exception as e:
+    except:
         return {
             "Platform": "Telegram",
             "Account Name": "N/A",
             "Account Bio": "N/A",
+            "Karma": "N/A",
+            "Created At": "N/A",
             "Status": "Failed or Not Found",
             "Link": url
         }
@@ -81,5 +97,5 @@ if st.button("ابدأ"):
     if results:
         df = pd.DataFrame(results)
         st.markdown("### 📊 النتائج:")
-        st.dataframe(df)
+        st.dataframe(df, use_container_width=True)
         st.download_button("تحميل النتائج CSV", df.to_csv(index=False).encode('utf-8'), "results.csv", "text/csv")
