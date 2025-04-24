@@ -2,10 +2,11 @@ import streamlit as st
 import pandas as pd
 import requests
 from bs4 import BeautifulSoup
-import instaloader
 import praw
+import instaloader
+import os
 
-# إعداد Reddit API
+# إعداد Reddit
 reddit = praw.Reddit(
     client_id="qfRizUHOzPM5DXtO8a3UoQ",
     client_secret="nrklg9cnDPaqu0Vzfa_RdOk2lETt3A",
@@ -14,35 +15,44 @@ reddit = praw.Reddit(
     user_agent="Reddit scraper by u/Few_Measurement8753"
 )
 
-# دالة استخراج بيانات Reddit
-def scrape_reddit(username):
+# إعداد Instagram (باستخدام ملف الجلسة)
+loader = instaloader.Instaloader()
+SESSION_FILE = "session-frfrre45"
+if os.path.exists(SESSION_FILE):
     try:
-        user = reddit.redditor(username)
-        name = user.name
-        bio = user.subreddit.public_description if user.subreddit else "N/A"
-        karma = user.link_karma + user.comment_karma
-        created = pd.to_datetime(user.created_utc, unit='s').strftime('%Y-%m-%d')
+        loader.load_session_from_file("frfrre45", SESSION_FILE)
+    except Exception as e:
+        st.error(f"خطأ في تحميل جلسة Instagram: {e}")
+else:
+    st.warning("⚠️ ملف الجلسة غير موجود. لن تعمل خاصية Instagram.")
+
+# دالة استخراج بيانات Instagram
+def scrape_instagram(username):
+    try:
+        profile = instaloader.Profile.from_username(loader.context, username)
         return {
-            "Platform": "Reddit",
-            "Account Name": name,
-            "Account Bio": bio,
-            "Karma": karma,
-            "Created": created,
-            "Status": "Active",
-            "Link": f"https://www.reddit.com/user/{username}/"
+            "Platform": "Instagram",
+            "Account Name": profile.username,
+            "Account Bio": profile.biography,
+            "Followers": profile.followers,
+            "Following": profile.followees,
+            "Posts": profile.mediacount,
+            "Created": profile.date_joined.strftime("%Y-%m-%d") if profile.date_joined else "N/A",
+            "Status": "Active"
         }
-    except:
+    except Exception as e:
         return {
-            "Platform": "Reddit",
+            "Platform": "Instagram",
             "Account Name": "N/A",
             "Account Bio": "N/A",
-            "Karma": "N/A",
+            "Followers": "N/A",
+            "Following": "N/A",
+            "Posts": "N/A",
             "Created": "N/A",
-            "Status": "Failed or Not Found",
-            "Link": f"https://www.reddit.com/user/{username}/"
+            "Status": "Failed or Not Found"
         }
 
-# دالة استخراج بيانات Telegram
+# دالة Telegram
 def scrape_telegram(url):
     try:
         response = requests.get(url)
@@ -53,74 +63,69 @@ def scrape_telegram(url):
             "Platform": "Telegram",
             "Account Name": name["content"] if name else "N/A",
             "Account Bio": bio["content"] if bio else "N/A",
-            "Karma": "N/A",
-            "Created": "N/A",
             "Status": "Active",
             "Link": url
         }
-    except:
+    except Exception:
         return {
             "Platform": "Telegram",
             "Account Name": "N/A",
             "Account Bio": "N/A",
-            "Karma": "N/A",
-            "Created": "N/A",
             "Status": "Failed or Not Found",
             "Link": url
         }
 
-# دالة استخراج بيانات Instagram
-def scrape_instagram(username):
+# دالة Reddit
+def scrape_reddit(username):
     try:
-        L = instaloader.Instaloader()
-        L.load_session_from_file("frfrre45")  # اسم المستخدم اللي سجلت منه
-        profile = instaloader.Profile.from_username(L.context, username)
+        user = reddit.redditor(username)
+        name = user.name
+        bio = user.subreddit.public_description if user.subreddit else "N/A"
+        karma = user.link_karma + user.comment_karma
+        cake_day = user.created_utc
         return {
-            "Platform": "Instagram",
-            "Account Name": profile.username,
-            "Account Bio": profile.biography,
-            "Followers": profile.followers,
-            "Following": profile.followees,
-            "Posts": profile.mediacount,
-            "Created": "N/A",
+            "Platform": "Reddit",
+            "Account Name": name,
+            "Account Bio": bio,
+            "Karma": karma,
+            "Created At": pd.to_datetime(cake_day, unit="s").strftime("%Y-%m-%d"),
             "Status": "Active",
-            "Link": f"https://www.instagram.com/{username}/"
+            "Link": f"https://www.reddit.com/user/{username}/"
         }
-    except:
+    except Exception:
         return {
-            "Platform": "Instagram",
+            "Platform": "Reddit",
             "Account Name": "N/A",
             "Account Bio": "N/A",
-            "Followers": "N/A",
-            "Following": "N/A",
-            "Posts": "N/A",
-            "Created": "N/A",
+            "Karma": "N/A",
+            "Created At": "N/A",
             "Status": "Failed or Not Found",
-            "Link": f"https://www.instagram.com/{username}/"
+            "Link": f"https://www.reddit.com/user/{username}/"
         }
 
-# واجهة المستخدم
+# واجهة Streamlit
 st.title("🔍 Social Account Scraper")
-platform = st.selectbox("اختر المنصة:", ["Reddit", "Telegram", "Instagram"])
-input_text = st.text_area("أدخل روابط أو يوزرات الحسابات (كل واحد في سطر):")
+
+platform = st.selectbox("اختر المنصة:", ["Instagram", "Telegram", "Reddit"])
+input_text = st.text_area("أدخل روابط أو أسماء الحسابات (كل سطر يمثل حساب):")
 
 if st.button("ابدأ"):
+    st.info(f"جاري سحب البيانات من {platform}...")
     results = []
-    entries = [line.strip() for line in input_text.splitlines() if line.strip()]
+    lines = [line.strip() for line in input_text.split("\n") if line.strip()]
     
-    with st.spinner(f"جاري سحب البيانات من {platform}..."):
-        for entry in entries:
-            if platform == "Reddit":
-                username = entry.split("/")[-2] if entry.endswith("/") else entry.split("/")[-1]
-                results.append(scrape_reddit(username))
-            elif platform == "Telegram":
-                results.append(scrape_telegram(entry))
-            elif platform == "Instagram":
-                username = entry.split("/")[-2] if entry.endswith("/") else entry.split("/")[-1]
-                results.append(scrape_instagram(username))
-
+    for item in lines:
+        if platform == "Instagram":
+            username = item.split("/")[-2] if item.endswith("/") else item.split("/")[-1]
+            results.append(scrape_instagram(username))
+        elif platform == "Telegram":
+            results.append(scrape_telegram(item))
+        elif platform == "Reddit":
+            username = item.split("/")[-2] if item.endswith("/") else item.split("/")[-1]
+            results.append(scrape_reddit(username))
+    
     if results:
         df = pd.DataFrame(results)
-        st.markdown("### النتائج:")
+        st.markdown("### 📊 النتائج:")
         st.dataframe(df)
-        st.download_button("تحميل النتائج CSV", df.to_csv(index=False).encode("utf-8"), "results.csv", "text/csv")
+        st.download_button("تحميل النتائج CSV", df.to_csv(index=False).encode('utf-8'), "results.csv", "text/csv")
