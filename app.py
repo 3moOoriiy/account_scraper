@@ -2,10 +2,10 @@ import streamlit as st
 import pandas as pd
 import requests
 from bs4 import BeautifulSoup
-import praw
 import instaloader
+import praw
 
-# إعداد الاتصال بـ Reddit
+# إعداد Reddit API
 reddit = praw.Reddit(
     client_id="qfRizUHOzPM5DXtO8a3UoQ",
     client_secret="nrklg9cnDPaqu0Vzfa_RdOk2lETt3A",
@@ -14,23 +14,20 @@ reddit = praw.Reddit(
     user_agent="Reddit scraper by u/Few_Measurement8753"
 )
 
-# دالة سحب بيانات من Reddit
+# دالة استخراج بيانات Reddit
 def scrape_reddit(username):
     try:
         user = reddit.redditor(username)
         name = user.name
+        bio = user.subreddit.public_description if user.subreddit else "N/A"
         karma = user.link_karma + user.comment_karma
-        created_at = pd.to_datetime(user.created_utc, unit='s').date()
-        try:
-            bio = user.subreddit.public_description
-        except:
-            bio = "N/A"
+        created = pd.to_datetime(user.created_utc, unit='s').strftime('%Y-%m-%d')
         return {
             "Platform": "Reddit",
             "Account Name": name,
             "Account Bio": bio,
             "Karma": karma,
-            "Created": created_at,
+            "Created": created,
             "Status": "Active",
             "Link": f"https://www.reddit.com/user/{username}/"
         }
@@ -45,7 +42,7 @@ def scrape_reddit(username):
             "Link": f"https://www.reddit.com/user/{username}/"
         }
 
-# دالة سحب بيانات من Telegram
+# دالة استخراج بيانات Telegram
 def scrape_telegram(url):
     try:
         response = requests.get(url)
@@ -72,11 +69,12 @@ def scrape_telegram(url):
             "Link": url
         }
 
-# دالة سحب بيانات من Instagram
+# دالة استخراج بيانات Instagram
 def scrape_instagram(username):
     try:
-        loader = instaloader.Instaloader()
-        profile = instaloader.Profile.from_username(loader.context, username)
+        L = instaloader.Instaloader()
+        L.load_session_from_file("frfrre45")  # اسم المستخدم اللي سجلت منه
+        profile = instaloader.Profile.from_username(L.context, username)
         return {
             "Platform": "Instagram",
             "Account Name": profile.username,
@@ -101,28 +99,28 @@ def scrape_instagram(username):
             "Link": f"https://www.instagram.com/{username}/"
         }
 
-# واجهة Streamlit
+# واجهة المستخدم
 st.title("🔍 Social Account Scraper")
-platform = st.selectbox("اختر المنصة:", ["Telegram", "Reddit", "Instagram"])
-input_text = st.text_area("أدخل روابط الحسابات (كل رابط في سطر):")
+platform = st.selectbox("اختر المنصة:", ["Reddit", "Telegram", "Instagram"])
+input_text = st.text_area("أدخل روابط أو يوزرات الحسابات (كل واحد في سطر):")
 
 if st.button("ابدأ"):
-    st.info(f"جاري سحب البيانات من {platform}...")
     results = []
-    links = [line.strip() for line in input_text.split("\n") if line.strip()]
-
-    for link in links:
-        if platform == "Reddit":
-            username = link.rstrip("/").split("/")[-1]
-            results.append(scrape_reddit(username))
-        elif platform == "Telegram":
-            results.append(scrape_telegram(link))
-        elif platform == "Instagram":
-            username = link.rstrip("/").split("/")[-1]
-            results.append(scrape_instagram(username))
+    entries = [line.strip() for line in input_text.splitlines() if line.strip()]
+    
+    with st.spinner(f"جاري سحب البيانات من {platform}..."):
+        for entry in entries:
+            if platform == "Reddit":
+                username = entry.split("/")[-2] if entry.endswith("/") else entry.split("/")[-1]
+                results.append(scrape_reddit(username))
+            elif platform == "Telegram":
+                results.append(scrape_telegram(entry))
+            elif platform == "Instagram":
+                username = entry.split("/")[-2] if entry.endswith("/") else entry.split("/")[-1]
+                results.append(scrape_instagram(username))
 
     if results:
         df = pd.DataFrame(results)
-        st.markdown("### 📊 النتائج:")
+        st.markdown("### النتائج:")
         st.dataframe(df)
-        st.download_button("📁 تحميل النتائج CSV", df.to_csv(index=False).encode("utf-8"), "results.csv", "text/csv")
+        st.download_button("تحميل النتائج CSV", df.to_csv(index=False).encode("utf-8"), "results.csv", "text/csv")
