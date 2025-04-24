@@ -15,44 +15,32 @@ reddit = praw.Reddit(
     user_agent="Reddit scraper by u/Few_Measurement8753"
 )
 
-# إعداد Instagram (باستخدام ملف الجلسة)
-loader = instaloader.Instaloader()
+# إعداد Instagram (باستخدام جلسة)
 SESSION_FILE = "session-frfrre45"
-if os.path.exists(SESSION_FILE):
-    try:
-        loader.load_session_from_file("frfrre45", SESSION_FILE)
-    except Exception as e:
-        st.error(f"خطأ في تحميل جلسة Instagram: {e}")
-else:
-    st.warning("⚠️ ملف الجلسة غير موجود. لن تعمل خاصية Instagram.")
+loader = instaloader.Instaloader()
 
-# دالة استخراج بيانات Instagram
-def scrape_instagram(username):
+# دالة سحب بيانات Reddit
+def scrape_reddit(username):
     try:
-        profile = instaloader.Profile.from_username(loader.context, username)
+        user = reddit.redditor(username)
+        bio = user.subreddit.public_description if user.subreddit else "N/A"
         return {
-            "Platform": "Instagram",
-            "Account Name": profile.username,
-            "Account Bio": profile.biography,
-            "Followers": profile.followers,
-            "Following": profile.followees,
-            "Posts": profile.mediacount,
-            "Created": profile.date_joined.strftime("%Y-%m-%d") if profile.date_joined else "N/A",
-            "Status": "Active"
+            "Platform": "Reddit",
+            "Account Name": user.name,
+            "Account Bio": bio,
+            "Status": "Active",
+            "Link": f"https://www.reddit.com/user/{username}/"
         }
-    except Exception as e:
+    except:
         return {
-            "Platform": "Instagram",
+            "Platform": "Reddit",
             "Account Name": "N/A",
             "Account Bio": "N/A",
-            "Followers": "N/A",
-            "Following": "N/A",
-            "Posts": "N/A",
-            "Created": "N/A",
-            "Status": "Failed or Not Found"
+            "Status": "Failed or Not Found",
+            "Link": f"https://www.reddit.com/user/{username}/"
         }
 
-# دالة Telegram
+# دالة سحب بيانات Telegram
 def scrape_telegram(url):
     try:
         response = requests.get(url)
@@ -66,7 +54,7 @@ def scrape_telegram(url):
             "Status": "Active",
             "Link": url
         }
-    except Exception:
+    except:
         return {
             "Platform": "Telegram",
             "Account Name": "N/A",
@@ -75,57 +63,59 @@ def scrape_telegram(url):
             "Link": url
         }
 
-# دالة Reddit
-def scrape_reddit(username):
+# دالة سحب بيانات Instagram
+def scrape_instagram(username):
     try:
-        user = reddit.redditor(username)
-        name = user.name
-        bio = user.subreddit.public_description if user.subreddit else "N/A"
-        karma = user.link_karma + user.comment_karma
-        cake_day = user.created_utc
+        loader.load_session_from_file("frfrre45")
+        profile = instaloader.Profile.from_username(loader.context, username)
         return {
-            "Platform": "Reddit",
-            "Account Name": name,
-            "Account Bio": bio,
-            "Karma": karma,
-            "Created At": pd.to_datetime(cake_day, unit="s").strftime("%Y-%m-%d"),
+            "Platform": "Instagram",
+            "Account Name": profile.username,
+            "Account Bio": profile.biography,
+            "Followers": profile.followers,
+            "Following": profile.followees,
+            "Posts": profile.mediacount,
+            "Created": profile.date_joined.strftime("%Y-%m-%d") if profile.date_joined else "N/A",
             "Status": "Active",
-            "Link": f"https://www.reddit.com/user/{username}/"
+            "Link": f"https://www.instagram.com/{username}/"
         }
-    except Exception:
+    except Exception as e:
         return {
-            "Platform": "Reddit",
+            "Platform": "Instagram",
             "Account Name": "N/A",
             "Account Bio": "N/A",
-            "Karma": "N/A",
-            "Created At": "N/A",
+            "Followers": "N/A",
+            "Following": "N/A",
+            "Posts": "N/A",
+            "Created": "N/A",
             "Status": "Failed or Not Found",
-            "Link": f"https://www.reddit.com/user/{username}/"
+            "Link": f"https://www.instagram.com/{username}/"
         }
 
 # واجهة Streamlit
 st.title("🔍 Social Account Scraper")
-
-platform = st.selectbox("اختر المنصة:", ["Instagram", "Telegram", "Reddit"])
-input_text = st.text_area("أدخل روابط أو أسماء الحسابات (كل سطر يمثل حساب):")
+platform = st.selectbox("اختر المنصة:", ["Telegram", "Reddit", "Instagram"])
+input_text = st.text_area("أدخل روابط الحسابات (كل رابط في سطر):")
 
 if st.button("ابدأ"):
     st.info(f"جاري سحب البيانات من {platform}...")
     results = []
-    lines = [line.strip() for line in input_text.split("\n") if line.strip()]
-    
-    for item in lines:
-        if platform == "Instagram":
-            username = item.split("/")[-2] if item.endswith("/") else item.split("/")[-1]
-            results.append(scrape_instagram(username))
-        elif platform == "Telegram":
-            results.append(scrape_telegram(item))
-        elif platform == "Reddit":
-            username = item.split("/")[-2] if item.endswith("/") else item.split("/")[-1]
+    links = [line.strip() for line in input_text.split("\n") if line.strip()]
+
+    for link in links:
+        if platform == "Reddit":
+            username = link.rstrip("/").split("/")[-1]
             results.append(scrape_reddit(username))
-    
+
+        elif platform == "Telegram":
+            results.append(scrape_telegram(link))
+
+        elif platform == "Instagram":
+            username = link.rstrip("/").split("/")[-1]
+            results.append(scrape_instagram(username))
+
     if results:
         df = pd.DataFrame(results)
         st.markdown("### 📊 النتائج:")
         st.dataframe(df)
-        st.download_button("تحميل النتائج CSV", df.to_csv(index=False).encode('utf-8'), "results.csv", "text/csv")
+        st.download_button("تحميل النتائج CSV", df.to_csv(index=False).encode("utf-8"), "results.csv", "text/csv")
